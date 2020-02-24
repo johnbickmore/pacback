@@ -2,17 +2,45 @@
 import os
 import re
 import itertools
+import subprocess
 import datetime as dt
 import multiprocessing as mp
 import python_scripts as PS
 
 log_file = '/var/log/pacback.log'
 rp_paths = '/var/lib/pacback/restore-points'
-
+session_lock = '/tmp/pacback_session_lock'
 
 #<#><#><#><#><#><#>#<#>#<#
 #<># Utils For Other Funcs
 #<#><#><#><#><#><#>#<#>#<#
+
+
+def spawn_hook_lock(seconds):
+    subprocess.Popen('touch /tmp/pacback_hook_lock && sleep ' + seconds + ' && rm /tmp/pacback_hook_lock', shell=True)
+
+
+def session_lock(action):
+    if action == 'start':
+        os.system('touch /tmp/pacback_session_lock')
+    elif action == 'end':
+        os.system('rm /tmp/pacback_session_lock')
+
+
+def check_lock(typ):
+    if typ == 'hook':
+        if os.path.exists('/tmp/pacback_hook_lock'):
+            PS.Abort_With_Log('HookLock', 'Aborting: Created a Snapback Less Than 60 Seconds Ago.',
+                              'Aborting: Created a Snapback Less Than 60 Seconds Ago.', log_file)
+        else:
+            PS.Write_To_Log('HookLock', 'Passed Lock Check', log_file)
+
+    elif typ == 'session':
+        if os.path.exists('/tmp/pacback_session_lock'):
+            PS.Abort_With_Log('SessionLock', 'Aborting: Pacback Already Has An Active Session Lock',
+                              'Aborting: Pacback Already Has An Active Session Lock', log_file)
+        else:
+            PS.Write_To_Log('SessionLock', 'Passed Lock Check', log_file)
 
 
 def max_threads():
@@ -59,16 +87,12 @@ def trim_pkg_list(pkg_list):
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def pacman_Q(replace_spaces=False):
+def pacman_Q():
     '''Writes the output into /tmp, reads file, then removes file.'''
     os.system("pacman -Q > /tmp/pacman_q.meta")
     ql = PS.Read_List('/tmp/pacman_q.meta', typ='set')
     PS.RM_File('/tmp/pacman_q.meta', sudo=True)
-    if replace_spaces is True:
-        rl = {s.strip().replace(' ', '-') for s in ql}
-        return rl
-    else:
-        return ql
+    return ql
 
 
 def fetch_paccache():
@@ -188,63 +212,6 @@ def rollback_packages(pkg_list):
     PS.pacman(' '.join(pkg_paths), '-U')
     PS.Write_To_Log('UserSearch', 'Sent ' + ' '.join(pkg_paths) + ' to Pacman -U', log_file)
     PS.End_Log('RbPkgs', log_file)
-
-
-#<#><#><#><#><#><#>#<#>#<#
-#<># Better Cache Cleaning
-#<#><#><#><#><#><#>#<#>#<#
-
-
-def clean_cache(count):
-    '''Automated Cache Cleaning Using pacman, paccache, and pacback.'''
-    PS.Start_Log('CleanCache', log_file)
-    PS.prWorking('Starting Advanced Cache Cleaning...')
-    if PS.YN_Frame('Do You Want To Uninstall Orphaned Packages?') is True:
-        os.system('sudo pacman -R $(pacman -Qtdq)')
-        PS.Write_To_Log('CleanCache', 'Ran pacman -Rns $(pacman -Qtdq)', log_file)
-
-    if PS.YN_Frame('Do You Want To Remove Old Versions of Installed Packages?') is True:
-        os.system('sudo paccache -rk ' + count)
-        PS.Write_To_Log('CleanCache', 'Ran paccache -rk ' + count, log_file)
-
-    if PS.YN_Frame('Do You Want To Remove Cached Orphans?') is True:
-        os.system('sudo paccache -ruk0')
-        PS.Write_To_Log('CleanCache', 'Ran paccache -ruk0', log_file)
-
-    if PS.YN_Frame('Do You Want To Check For Old Pacback Restore Points?') is True:
-        PS.Write_To_Log('CleanCache', 'Started Search For Old RPs', log_file)
-        metas = PS.Search_FS(rp_paths, 'set')
-        rps = {f for f in metas if f.endswith(".meta")}
-
-        for m in rps:
-            rp_num = m.split('/')[-1]
-            # Find RP Create Date in Meta File
-            meta = PS.Read_List(m)
-            for l in meta:
-                if l.split(':')[0] == 'Date Created':
-                    target_date = l.split(':')[1].strip()
-                    break
-
-            # Parse and Format Dates for Compare
-            today = dt.datetime.now().strftime("%Y/%m/%d")
-            t_split = list(today.split('/'))
-            today_date = dt.date(int(t_split[0]), int(t_split[1]), int(t_split[2]))
-            o_split = list(target_date.split('/'))
-            old_date = dt.date(int(o_split[0]), int(o_split[1]), int(o_split[2]))
-
-            # Compare Days
-            days = (today_date - old_date).days
-            if days > 180:
-                PS.prWarning(m.split('/')[-1] + ' Is Over 180 Days Old!')
-                if PS.YN_Frame('Do You Want to Remove This Restore Point?') is True:
-                    PS.RM_File(m, sudo=True)
-                    PS.RM_Dir(m[:-5], sudo=True)
-                    PS.prSuccess('Restore Point Removed!')
-                    PS.Write_To_Log('CleanCache', 'Removed RP ' + rp_num, log_file)
-            PS.prSuccess(rp_num + ' Is Only ' + str(days) + ' Days Old!')
-            PS.Write_To_Log('CleanCache', 'RP ' + rp_num + ' Was Less Than 180 Days 0ld', log_file)
-
-    PS.End_Log('CleanCache', log_file)
 
 
 #<#><#><#><#><#><#>#<#>#<#
@@ -373,6 +340,7 @@ def print_all_rps():
 def remove_rp(rp_num, nc):
     PS.Start_Log('RemoveRP', log_file)
     rp = rp_paths + '/rp' + rp_num + '.meta'
+    print_rp_info(rp_num)
 
     if nc is False:
         if PS.YN_Frame('Do You Want to Remove This Restore Point?') is True:
@@ -381,7 +349,7 @@ def remove_rp(rp_num, nc):
             PS.prSuccess('Restore Point Removed!')
             PS.Write_To_Log('RemoveRP', 'Removed Restore Point ' + rp_num, log_file)
         else:
-            PS.Write_To_Log('RemoveRP', 'User Declined Removing Restore Point ' + rp_num)
+            PS.Write_To_Log('RemoveRP', 'User Declined Removing Restore Point ' + rp_num, log_file)
 
     elif nc is True:
         PS.RM_File(rp, sudo=False)
@@ -390,3 +358,60 @@ def remove_rp(rp_num, nc):
         PS.Write_To_Log('RemoveRP', 'Removed Restore Point ' + rp_num, log_file)
 
     PS.End_Log('RemoveRP', log_file)
+
+
+#<#><#><#><#><#><#>#<#>#<#
+#<># Better Cache Cleaning
+#<#><#><#><#><#><#>#<#>#<#
+
+
+def clean_cache(count):
+    '''Automated Cache Cleaning Using pacman, paccache, and pacback.'''
+    PS.Start_Log('CleanCache', log_file)
+    PS.prWorking('Starting Advanced Cache Cleaning...')
+    if PS.YN_Frame('Do You Want To Uninstall Orphaned Packages?') is True:
+        os.system('sudo pacman -R $(pacman -Qtdq)')
+        PS.Write_To_Log('CleanCache', 'Ran pacman -Rns $(pacman -Qtdq)', log_file)
+
+    if PS.YN_Frame('Do You Want To Remove Old Versions of Installed Packages?') is True:
+        os.system('sudo paccache -rk ' + count)
+        PS.Write_To_Log('CleanCache', 'Ran paccache -rk ' + count, log_file)
+
+    if PS.YN_Frame('Do You Want To Remove Cached Orphans?') is True:
+        os.system('sudo paccache -ruk0')
+        PS.Write_To_Log('CleanCache', 'Ran paccache -ruk0', log_file)
+
+    if PS.YN_Frame('Do You Want To Check For Old Pacback Restore Points?') is True:
+        PS.Write_To_Log('CleanCache', 'Started Search For Old RPs', log_file)
+        metas = PS.Search_FS(rp_paths, 'set')
+        rps = {f for f in metas if f.endswith(".meta")}
+
+        for m in rps:
+            rp_num = m.split('/')[-1]
+            # Find RP Create Date in Meta File
+            meta = PS.Read_List(m)
+            for l in meta:
+                if l.split(':')[0] == 'Date Created':
+                    target_date = l.split(':')[1].strip()
+                    break
+
+            # Parse and Format Dates for Compare
+            today = dt.datetime.now().strftime("%Y/%m/%d")
+            t_split = list(today.split('/'))
+            today_date = dt.date(int(t_split[0]), int(t_split[1]), int(t_split[2]))
+            o_split = list(target_date.split('/'))
+            old_date = dt.date(int(o_split[0]), int(o_split[1]), int(o_split[2]))
+
+            # Compare Days
+            days = (today_date - old_date).days
+            if days > 180:
+                PS.prWarning(m.split('/')[-1] + ' Is Over 180 Days Old!')
+                if PS.YN_Frame('Do You Want to Remove This Restore Point?') is True:
+                    PS.RM_File(m, sudo=True)
+                    PS.RM_Dir(m[:-5], sudo=True)
+                    PS.prSuccess('Restore Point Removed!')
+                    PS.Write_To_Log('CleanCache', 'Removed RP ' + rp_num, log_file)
+            PS.prSuccess(rp_num + ' Is Only ' + str(days) + ' Days Old!')
+            PS.Write_To_Log('CleanCache', 'RP ' + rp_num + ' Was Less Than 180 Days 0ld', log_file)
+
+    PS.End_Log('CleanCache', log_file)

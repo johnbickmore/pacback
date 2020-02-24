@@ -1,5 +1,5 @@
 # Pacback - Alpha 1.6
-**TLDR: This projects ultimate goal is to provide flexible and resilient downgrades while maintaining a slim profile and fast performance.**
+**TLDR: This projects ultimate goal is to provide resilient and flexible downgrades while maintaining a slim profile and fast performance.**
 
 ### Index:
 1. [CLI Commands](https://github.com/JustinTimperio/pacback#pacback-cli-commands-and-flags)
@@ -10,7 +10,7 @@
  
 
 ## Abstract:
-I love Arch Linux and rolling-release distros. Being at the head of Linux kernel and application development means access to the latest features and bug fixes. This also often means dealing with the latest bugs. While I don't run into major bugs often, when they happen, they cripple my productivity. Reversing individual packages is generally a slow and manual process. While some tools exist, none meet my needs. In particular, support for rolling back AUR packages is extremely lacking.  
+I love Arch Linux and rolling-release distros. Being at the head of Linux kernel and application development means access to the latest features and bug fixes. This also often means dealing with the latest bugs. While I don't run into major bugs often, when they happen, they cripple my productivity. Reversing individual packages is generally a slow manual process and while some tools exist, none meet my needs. In particular, support for downgrading AUR packages is extremely lacking.  
 
 ## Core Features:
 
@@ -86,7 +86,6 @@ If you are upgrading from a cloned git repo please follow these steps.
 6. `sudo rm -R /path/to/repo` (Remome now unused git repo)
 
 
-
 ------------------
 
 ## Pacback Usage Examples:
@@ -140,6 +139,7 @@ Another popular way to rollback package versions is to fetch packages directly f
 
 ![Pacback Rolling Back an Archive Date](https://imgur.com/nBaYYCB.gif)
 
+
 ------------------------
 
 ## Pacback's Design:
@@ -175,6 +175,7 @@ Full Restore Points also generate a metadata file but even if you lose or delete
 - Hardlinking Packages Can Take A Long Time (~15-25 seconds)
 - Full RP's Don't Protect Against Inode Corruption
 
+
 ------------------
 
 ## Metadata Files
@@ -192,6 +193,7 @@ aarch64-linux-gnu-binutils 2.33.1-1
 aarch64-linux-gnu-gcc 9.2.0-1  
 aarch64-linux-gnu-glibc 2.30-1  
 aarch64-linux-gnu-linux-api-headers 4.20-1
+
 
 ------------------
 
@@ -215,8 +217,10 @@ If you run into any errors or are about to submit a bug, please check your log f
 - [x] Multi-Threaded Package Searches and Filtering
 - [x] Linux Filesystem Hierarchy Compliance
 - [x] Fix Checksumming
-- [ ] Fix Directory Creation
-- [ ] Better Color Output
 - [x] AUR Package
+- [x] Improved Internal Documentation
+- [ ] Add Session Locks
+- [ ] Prevent Multiple Snapback Creations During Scripting
+- [ ] Retain Multiple Snapbacks
+- [ ] Better Color Output
 - [ ] Support for Fetching Single Non-Cached Package Versions
-- [ ] Improved Internal Documentation

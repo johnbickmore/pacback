@@ -57,7 +57,7 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
         pac_cache = rp_path + '/pac_cache'
 
         PS.prWorking('Retrieving Current Packages...')
-        pkg_search = pu.pacman_Q(replace_spaces=True)
+        pkg_search = PS.replace_spaces(pu.pacman_Q()
 
         # Search File System for Pkgs
         PS.prWorking('Bulk Scanning for ' + str(len(pkg_search)) + ' Packages...')

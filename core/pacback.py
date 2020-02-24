@@ -6,8 +6,8 @@ import os
 import create_rp as cp
 import rollback_rp as rb
 import pac_utils as pu
-import version_control as vc
 from python_scripts import prError
+from version_control import pre_flight_check
 
 
 #<#><#><#><#><#><#>#<#>#<#
@@ -61,9 +61,12 @@ args = parser.parse_args()
 #<># Args Flow Control
 #<#><#><#><#><#><#>#<#>#<#
 
-version = '1.6.1'
-vc.pre_fligh_check()
+version = '1.7.0'
+pu.check_lock('session')
+pu.session_lock('start')
+pre_flight_check()
 
+# Output Info to User
 if args.version:
     print('Pacback Version: ' + version)
 
@@ -77,8 +80,9 @@ if args.info:
 if args.list:
     pu.print_all_rps()
 
+# Core Functions
 if args.remove:
-    vc.check_if_root()
+    pu.Require_Root()
     if re.findall(r'^([0-9]|0[1-9]|[1-9][0-9])$', args.remove):
         num = str(args.remove).zfill(2)
         pu.remove_rp(num, args.no_confirm)
@@ -86,40 +90,42 @@ if args.remove:
         prError('Info Args Must Be in INT Format!')
 
 elif args.clean:
-    vc.check_if_root()
+    pu.Require_Root()
     pu.clean_cache(args.clean)
 
 elif args.install_hook:
-    vc.check_if_root()
+    pu.Require_Root()
     pu.pacback_hook(install=True)
 
 elif args.remove_hook:
-    vc.check_if_root()
+    pu.Require_Root()
     pu.pacback_hook(install=False)
 
 elif args.rollback_pkgs:
-    vc.check_if_root()
+    pu.Require_Root()
     pu.rollback_packages(args.rollback_pkgs)
 
 elif args.hook:
-    vc.check_if_root()
+    pu.Require_Root()
+    pu.check_lock('hook')
     args.no_confirm = True
     cp.create_restore_point(version, '00', args.full_rp, args.add_dir, args.no_confirm, args.notes)
+    pu.spawn_hook_lock('60')
 
 elif args.upgrade:
-    vc.check_if_root()
+    pu.Require_Root()
     cp.create_restore_point(version, '00', args.full_rp, args.add_dir, args.no_confirm, args.notes)
     os.system('sudo pacman -Syu')
 
 elif args.snapback:
-    vc.check_if_root()
+    pu.Require_Root()
     if os.path.exists('/var/lib/pacback/restore-points/rp00.meta'):
         rb.rollback_to_rp(version, '00')
     else:
-        prError('No Snapback Found!')
+        prError('No Snapbacks Found!')
 
 elif args.rollback:
-    vc.check_if_root()
+    pu.Require_Root()
     if re.findall(r'^([1-9]|0[1-9]|[1-9][0-9])$', args.rollback):
         rb.rollback_to_rp(version, args.rollback)
     elif re.findall(r'^(?:[0-9]{2})?[0-9]{2}/[0-3]?[0-9]/(?:[0-9]{2})?[0-9]{2}$', args.rollback):
@@ -128,14 +134,14 @@ elif args.rollback:
         prError('No Usable Argument! Rollback Arg Must be a Restore Point # or a Date.')
 
 elif args.create_rp:
-    vc.check_if_root()
+    pu.Require_Root()
     if re.findall(r'^([1-9]|0[1-9]|[1-9][0-9])$', args.create_rp):
         cp.create_restore_point(version, args.create_rp, args.full_rp, args.add_dir, args.no_confirm, args.notes)
     else:
         prError('Create RP Args Must Be INT or Date! Refer to Documentation for Help.')
 
 elif args.unlock_rollback:
-    vc.check_if_root()
+    pu.Require_Root()
     pu.unlock_rollback()
 
 elif not args.info or not args.version or not args.list:
@@ -143,3 +149,5 @@ elif not args.info or not args.version or not args.list:
 
 else:
     prError('No Usable Argument Given!')
+
+pu.session_lock('end')

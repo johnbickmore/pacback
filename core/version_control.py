@@ -8,30 +8,29 @@ import pac_utils as PU
 log_file = '/var/log/pacback.log'
 rp_paths = '/var/lib/pacback/restore-points'
 
-
 #<#><#><#><#><#><#>#<#>#<#
 #<># Version Control
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def check_if_root():
-    if not os.getuid() == 0:
-        PS.Start_Log('RootCheck', log_file)
-        PS.Abort_With_Log('RootCheck', 'Not Root!', 'Pacback Must Be Run With Sudo OR As Root!', log_file)
-
-
-def pre_fligh_check():
+def pre_flight_check():
     base_dir = os.path.dirname(os.path.realpath(__file__))[:-5]
     old_rp_path = base_dir + '/restore-points'
+
     if os.path.exists(old_rp_path):
+        # Upgrades Pacbacks File System Structure If Old
+        PU.Require_Root()
         PS.Start_Log('PreFlight', log_file)
         PS.prError('Looks Like You Are Upgrading From A Version Before 1.6!')
         PS.prWorking('Migrating Your Restore Point Folder Now...')
-        check_if_root()
         PS.MK_Dir('/var/lib/pacback', sudo=False)
         os.system('mv ' + old_rp_path + ' /var/lib/pacback')
         os.system('chown root:root /var/lib/pacback && chmod 700 /var/lib/pacback')
         PS.Write_To_Log('PreFlight', 'Pacback Successfully Migrated To /var/lib/pacback', log_file)
+
+    if os.path.exists(session_lock):
+        PS.prError('Pacback Already Has An Active Session Lock!')
+        sys.exit('Critical Error')
 
 
 def check_pacback_version(current_version, rp_path, meta_exists, meta):
