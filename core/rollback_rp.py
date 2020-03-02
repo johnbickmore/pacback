@@ -7,19 +7,57 @@ import python_scripts as PS
 import pac_utils as pu
 import version_control as vc
 
-log_file = '/var/log/pacback.log'
-rp_paths = '/var/lib/pacback/restore-points'
+
+#<#><#><#><#><#><#>#<#>#<#
+#<># User Defined Rollback
+#<#><#><#><#><#><#>#<#>#<#
+
+
+def rollback_packages(pkg_list, rp_paths, log_file):
+    '''Allows User to Rollback Any Number of Packages By Name'''
+    PS.Write_To_Log('UserSearch', 'Reached UserSearch', log_file)
+    PS.prWorking('Searching File System for Packages...')
+    cache = pu.fetch_paccache(rp_paths, log_file)
+    pkg_paths = list()
+    PS.Write_To_Log('UserSearch', 'Started Search for ' + ' '.join(pkg_list), log_file)
+
+    for pkg in pkg_list:
+        found_pkgs = pu.user_pkg_search(pkg, cache)
+        sort_pkgs = sorted(found_pkgs, reverse=True)
+
+        if len(found_pkgs) > 0:
+            PS.Write_To_Log('UserSearch', 'Found ' + str(len(found_pkgs)) + ' pkgs for ' + pkg, log_file)
+            PS.prSuccess('Pacback Found the Following Package Versions for ' + pkg + ':')
+            answer = PS.Multi_Choice_Frame(sort_pkgs)
+
+            if answer is False:
+                PS.Write_To_Log('UserSearch', 'User Force Exited Selection For ' + pkg, log_file)
+            else:
+                for x in cache:
+                    if re.findall(re.escape(answer), x):
+                        path = x
+                        pkg_paths.append(path)
+                        break
+
+        else:
+            PS.prError('No Packages Found Under the Name: ' + pkg)
+            PS.Write_To_Log('UserSearch', 'Search ' + pkg.upper() + ' Returned Zero Results', log_file)
+
+    PS.pacman(' '.join(pkg_paths), '-U')
+    PS.Write_To_Log('UserSearch', 'Sent ' + ' '.join(pkg_paths) + ' to Pacman -U', log_file)
+    PS.Write_To_Log('UserSearch', 'Exited UserSearch', log_file)
+
 
 #<#><#><#><#><#><#>#<#>#<#
 #<># Rollback to Date
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def rollback_to_date(date):
-    PS.Start_Log('RollbackToDate', log_file)
+def rollback_to_date(date, log_file):
+    PS.Write_To_Log('RollbackToDate','Reached RollbackToDate', log_file)
     # Validate Date Fromat and Build New URL
     if not re.findall(r'([12]\d{3}/(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01]))', date):
-        PS.Abort_With_Log('RollbackToDate', 'Aborting Due to Invalid Date Format',
+        pu.abort_with_log('RollbackToDate', 'Aborting Due to Invalid Date Format',
                           'Invalid Date! Date Must be YYYY/MM/DD Format', log_file)
 
     # Backup Mirrorlist
@@ -33,7 +71,26 @@ def rollback_to_date(date):
     # Run Pacman Update
     os.system('sudo pacman -Syyuu')
     PS.Write_To_Log('RollbackToDate', 'Ran pacman -Syyuu', log_file)
-    PS.End_Log('RollbackToDate', log_file)
+
+    # Check if mirrorlist is locked
+    if len(PS.Read_List('/etc/pacman.d/mirrorlist')) == 1:
+        PS.Write_To_Log('ReleaseMirrorlist', 'Lock Detected on Mirrorlist', log_file)
+
+        if os.path.exists('/etc/pacman.d/mirrolist.pacback'):
+            PS.Write_To_Log('ReleaseMirrorlist', 'Backup Mirrorlist Is Missing', log_file)
+            fetch = PS.YN_Frame('Pacback Can\'t Find Your Backup Mirrorlist! Do You Want to Fetch a New US HTTPS Mirrorlist?')
+            if fetch is True:
+                os.system("curl -s 'https://www.archlinux.org/mirrorlist/?country=US&protocol=https&use_mirror_status=on' | sed -e 's/^#Server/Server/' -e '/^#/d' | sudo tee /etc/pacman.d/mirrorlist.pacback >/dev/null")
+            else:
+                pu.abort_with_log('ReleaseMirrorlist', 'Backup Mirrorlist Is Missing and User Declined Download', 'Please Manually Replace Your Mirrorlist!', log_file)
+
+        os.system('sudo cp /etc/pacman.d/mirrorlist.pacback /etc/pacman.d/mirrorlist')
+        PS.Write_To_Log('ReleaseMirrorlist', 'Mirrorlist Was Restored Successfully', log_file)
+
+    else:
+        PS.Write_To_Log('ReleaseMirrorlist', 'Mirrorlist Was NOT Locked', log_file)
+
+    PS.Write_To_Log('RollbackToDate','Exited RollbackToDate', log_file)
 
 
 #<#><#><#><#><#><#>#<#>#<#
@@ -41,13 +98,14 @@ def rollback_to_date(date):
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def rollback_to_rp(version, rp_num):
-    PS.Start_Log('RollbackRP', log_file)
+def rollback_to_rp(version, rp_num, rp_paths, log_file):
+    PS.Write_To_Log('RollbackRP', 'Reached RollbackRP', log_file)
+
     #####################
     # Stage Rollback Vars
     #####################
     rp_num = str(rp_num).zfill(2)
-    rp_path = '/var/lib/pacback/restore-points/rp' + rp_num
+    rp_path = rp_paths + '/rp' + rp_num
     rp_tar = rp_path + '/rp' + rp_num + '_dirs.tar'
     rp_meta = rp_path + '.meta'
     current_pkgs = pu.pacman_Q()
@@ -83,11 +141,11 @@ def rollback_to_rp(version, rp_num):
 
     # Abort If No Files Are Found
     if meta_exists is False and full_rp is False:
-        PS.Abort_With_Log('RollbackRP', 'Restore Point #' + rp_num + ' Was NOT FOUND!',
+        pu.abort_with_log('RollbackRP', 'Restore Point #' + rp_num + ' Was NOT FOUND!',
                           'Restore Point #' + rp_num + ' Was NOT FOUND!', log_file)
 
     # Compare Versions
-    vc.check_pacback_version(version, rp_path, meta_exists, meta)
+    vc.check_pacback_version(version, rp_path, meta_exists, meta, log_file)
 
     ####################
     # Full Restore Point
@@ -109,7 +167,7 @@ def rollback_to_rp(version, rp_num):
             PS.pacman(rp_cache + '/*', '--needed -U')
             PS.Write_To_Log('RollbackRP', 'Send pacman -U /* --needed', log_file)
             PS.prError('Restore Point #' + rp_num + ' MetaData Was NOT FOUND!')
-            PS.Abort_With_Log('RollbackRP', 'Meta Is Missing So Skipping Advanced Features',
+            pu.abort_with_log('RollbackRP', 'Meta Is Missing So Skipping Advanced Features',
                               'Skipping Advanced Features!', log_file)
 
     #####################
@@ -150,7 +208,7 @@ def rollback_to_rp(version, rp_num):
                 PS.pacman(' '.join(found_pkgs), '-U')
                 PS.Write_To_Log('RollbackRP', 'Sent Found Packages To pacman -U', log_file)
             else:
-                PS.Abort_With_Log('RollbackRP', 'User Aborted Rollback Because of Missing Packages',
+                pu.abort_with_log('RollbackRP', 'User Aborted Rollback Because of Missing Packages',
                                   'Aborting Rollback!', log_file)
 
     # Ask User If They Want to Remove New Packages
@@ -310,4 +368,4 @@ def rollback_to_rp(version, rp_num):
         PS.prSuccess('Rollback to Restore Point #' + rp_num + ' Complete!')
         PS.Write_To_Log('RollbackRP', 'Rollback to RP #' + rp_num + ' Complete', log_file)
 
-    PS.End_Log('RollbackRP', log_file)
+    PS.Write_To_Log('RollbackRP', 'Exited RollbackRP', log_file)

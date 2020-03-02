@@ -7,17 +7,14 @@ import datetime as dt
 import python_scripts as PS
 import pac_utils as pu
 
-log_file = '/var/log/pacback.log'
-rp_paths = '/var/lib/pacback/restore-points'
-
 
 #<#><#><#><#><#><#>#<#>#<#
 #<># Create Restore Point
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
-    PS.Start_Log('CreateRP', log_file)
+def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes, rp_paths, log_file):
+    PS.Write_To_Log('CreateRP', 'Reached CreateRP', log_file)
     # Fail Safe for New Users
     if os.path.exists(rp_paths) is False:
         PS.MK_Dir('/var/lib/pacback', sudo=False)
@@ -38,7 +35,7 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
             if int(rp_num) != 0:
                 PS.prWarning('Restore Point #' + rp_num + ' Already Exists!')
                 if PS.YN_Frame('Do You Want to Overwrite It?') is False:
-                    PS.Abort_With_Log('CreateRP', 'User Aborted Overwrite of RP #' + rp_num, 'Aborting!', log_file)
+                    pu.abort_with_log('CreateRP', 'User Aborted Overwrite of RP #' + rp_num, 'Aborting!', log_file)
 
         PS.RM_File(rp_meta, sudo=False)
         PS.RM_Dir(rp_path, sudo=False)
@@ -57,11 +54,11 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
         pac_cache = rp_path + '/pac_cache'
 
         PS.prWorking('Retrieving Current Packages...')
-        pkg_search = PS.replace_spaces(pu.pacman_Q()
+        pkg_search = PS.Replace_Spaces(pu.pacman_Q())
 
         # Search File System for Pkgs
         PS.prWorking('Bulk Scanning for ' + str(len(pkg_search)) + ' Packages...')
-        found_pkgs = pu.search_paccache(pkg_search, pu.fetch_paccache())
+        found_pkgs = pu.search_paccache(pkg_search, pu.fetch_paccache(rp_paths, log_file), log_file)
         pac_size = PS.Size_Of_Files(found_pkgs)
 
         # Ask About Missing Pkgs
@@ -74,7 +71,7 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
                     for pkg in set(pkg_search - pkg_split):
                         PS.prWarning(pkg + ' Was NOT Found!')
                     if PS.YN_Frame('Do You Still Want to Continue?') is False:
-                        PS.Abort_With_Log('CreateRP', 'User Aborted Due to Missing Pkgs', 'Aborting!', log_file)
+                        pu.abort_with_log('CreateRP', 'User Aborted Due to Missing Pkgs', 'Aborting!', log_file)
 
         # HardLink Packages to RP
         PS.MK_Dir(rp_path, sudo=False)
@@ -113,7 +110,7 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
     elif rp_full is False:
         PS.Write_To_Log('CreateRP', 'Creating RP #' + rp_num + ' As A Light RP', log_file)
         if len(dir_list) > 0:
-            PS.Abort_With_Log('CreateRP', 'Custom Dirs Are Not Supported By LightRP',
+            pu.abort_with_log('CreateRP', 'Custom Dirs Are Not Supported By LightRP',
                               'Light Restore Points DO NOT Support Custom Dirs! Please Use The `-f` Flag', log_file)
         print('Building Light Restore Point...')
 
@@ -124,6 +121,7 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
     meta_list = ['====== Pacback RP #' + rp_num + ' ======',
                  'Pacback Version: ' + version,
                  'Date Created: ' + dt.datetime.now().strftime("%Y/%m/%d"),
+                 'Time Created: ' + dt.datetime.now().strftime("%H:%M:%S"),
                  'Packages Installed: ' + str(len(current_pkgs)),
                  'Packages in RP: ' + str(len(found_pkgs)),
                  'Size of Packages in RP: ' + PS.Convert_Size(pac_size)]
@@ -147,5 +145,5 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes):
     # Export Final Meta Data File
     PS.Export_List(rp_meta, meta_list)
     PS.Write_To_Log('CreateRP', 'RP #' + rp_num + ' Was Successfully Created', log_file)
-    PS.End_Log('CreateRP', log_file)
+    PS.Write_To_Log('CreateRP', 'Exited CreateRP', log_file)
     PS.prSuccess('Restore Point #' + rp_num + ' Successfully Created!')

@@ -5,35 +5,30 @@ import tqdm
 import python_scripts as PS
 import pac_utils as PU
 
-log_file = '/var/log/pacback.log'
-rp_paths = '/var/lib/pacback/restore-points'
 
 #<#><#><#><#><#><#>#<#>#<#
 #<># Version Control
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def pre_flight_check():
+def migration_check(log_file):
     base_dir = os.path.dirname(os.path.realpath(__file__))[:-5]
     old_rp_path = base_dir + '/restore-points'
 
     if os.path.exists(old_rp_path):
         # Upgrades Pacbacks File System Structure If Old
-        PU.Require_Root()
-        PS.Start_Log('PreFlight', log_file)
         PS.prError('Looks Like You Are Upgrading From A Version Before 1.6!')
         PS.prWorking('Migrating Your Restore Point Folder Now...')
+        PU.Require_Root()
+        PS.Start_Log('MigrationCheck', log_file)
         PS.MK_Dir('/var/lib/pacback', sudo=False)
         os.system('mv ' + old_rp_path + ' /var/lib/pacback')
         os.system('chown root:root /var/lib/pacback && chmod 700 /var/lib/pacback')
-        PS.Write_To_Log('PreFlight', 'Pacback Successfully Migrated To /var/lib/pacback', log_file)
-
-    if os.path.exists(session_lock):
-        PS.prError('Pacback Already Has An Active Session Lock!')
-        sys.exit('Critical Error')
+        PS.Write_To_Log('MigrationCheck', 'Pacback Successfully Migrated To /var/lib/pacback', log_file)
+        PS.End_Log('MigrationCheck', log_file)
 
 
-def check_pacback_version(current_version, rp_path, meta_exists, meta):
+def check_pacback_version(current_version, rp_path, meta_exists, meta, log_file):
     if meta_exists is False:
         PS.Write_To_Log('VersionControl', 'Restore Point is Missing MetaData', log_file)
 
@@ -71,13 +66,13 @@ def check_pacback_version(current_version, rp_path, meta_exists, meta):
                 PS.Write_To_Log('VersionControl', 'Detected Restore Point Version Generated > V1.5', log_file)
                 upgrade = PS.YN_Frame('Do You Want to Upgrade This Restore Point?')
                 if upgrade is True:
-                    upgrade_to_hardlinks(rp_path)
+                    upgrade_to_hardlinks(rp_path, log_file)
                 else:
                     PS.Abort_With_Log('VersionControl', 'User Exited Upgrade',
                                       'Aborting!', log_file)
 
 
-def upgrade_to_hardlinks(rp_path):
+def upgrade_to_hardlinks(rp_path, log_file):
     # This is a Total Hack Job. Don't Judge Me :(
     PS.prWorking('Unpacking...')
     PS.Write_To_Log('HardlinkUpgrade', 'Unpacking Old Restore Point For Conversion', log_file)
