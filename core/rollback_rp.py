@@ -16,7 +16,7 @@ import version_control as vc
 def rollback_packages(pkg_list, rp_paths, log_file):
     '''Allows User to Rollback Any Number of Packages By Name'''
     PS.Write_To_Log('UserSearch', 'Reached UserSearch', log_file)
-    PS.prWorking('Searching File System for Packages...')
+    PS.prBold('Searching File System for Packages...')
     cache = pu.fetch_paccache(rp_paths, log_file)
     pkg_paths = list()
     PS.Write_To_Log('UserSearch', 'Started Search for ' + ' '.join(pkg_list), log_file)
@@ -184,7 +184,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
 
         # Pass If No Packages Have Changed
         if len(changed_pkgs) > 0:
-            PS.prWorking('Bulk Scanning for ' + str(len(meta_old_pkgs)) + ' Packages...')
+            PS.prWarning('Bulk Scanning for ' + str(len(meta_old_pkgs)) + ' Packages...')
             found_pkgs = pu.search_paccache(m_search, pu.fetch_paccache(rp_paths, log_file), log_file)
         else:
             PS.prSuccess('No Packages Have Been Changed!')
@@ -238,7 +238,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
         PS.Write_To_Log('RollbackRP', 'Custom Dirs Specified in RP Meta File', log_file)
         custom_dirs = rp_tar[:-4]
         if os.path.exists(rp_tar + '.gz'):
-            PS.prWorking('Decompressing Restore Point....')
+            PS.prWarning('Decompressing Restore Point....')
             if any(re.findall('pigz', line.lower()) for line in current_pkgs):
                 os.system('pigz -d ' + rp_tar + '.gz -f')
                 PS.Write_To_Log('RPDiff', 'Decompressed Custom Files With Pigz', log_file)
@@ -249,7 +249,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
         if os.path.exists(custom_dirs):
             PS.RM_Dir(custom_dirs, sudo=True)
 
-        PS.prWorking('Unpacking Files from Restore Point Tar....')
+        PS.prWarning('Unpacking Files from Restore Point Tar....')
         PS.Untar_Dir(rp_tar)
         PS.Write_To_Log('RPDiff', 'Unpacked Custom Files RP Tar', log_file)
 
@@ -271,7 +271,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
                 print('Starting Full File Restore! Please Be Patient As All Files are Overwritten...')
                 rp_fs = PS.Search_FS(custom_dirs)
                 for f in rp_fs:
-                    PS.prWorking('Please Be Patient. This May Take a While...')
+                    PS.prWarning('Please Be Patient. This May Take a While...')
                     os.system('sudo mkdir -p ' + PS.Escape_Bash('/'.join(f.split('/')[:-1])) +
                               ' && sudo cp -af ' + PS.Escape_Bash(f) + ' ' + PS.Escape_Bash(f[len(custom_dirs):]))
 
@@ -331,7 +331,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
                     for f in diff_changed:
                         PS.prChanged(f)
                     if PS.YN_Frame('Do You Want to Overwrite Files That Have Been CHANGED?') is True:
-                        PS.prWorking('Please Be Patient. This May Take a While...')
+                        PS.prBold('Please Be Patient. This May Take a While...')
                         for f in diff_changed:
                             fs = (f.split(' : ')[0])
                             os.system('sudo cp -af ' + PS.Escape_Bash(custom_dirs + fs) + ' ' + PS.Escape_Bash(fs))
@@ -345,7 +345,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
                     for f in diff_removed:
                         PS.prRemoved(f)
                     if PS.YN_Frame('Do You Want to Add Files That Have Been REMOVED?') is True:
-                        PS.prWorking('Please Be Patient. This May Take a While...')
+                        PS.prBold('Please Be Patient. This May Take a While...')
                         for f in diff_removed:
                             fs = (f.split(' : ')[0])
                             os.system('sudo mkdir -p ' + PS.Escape_Bash('/'.join(fs.split('/')[:-1])) +

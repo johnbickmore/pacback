@@ -1,5 +1,5 @@
-# Pacback - Alpha 1.6
-**TLDR: This projects ultimate goal is to provide resilient and flexible downgrades while maintaining a slim profile and fast performance.**
+# Pacback - Beta 2.0
+**TLDR: This projects ultimate goal is to provide orchistrated system downgrades while maintaining a small footprint and fast performance.**
 
 ### Index:
 1. [CLI Commands](https://github.com/JustinTimperio/pacback#pacback-cli-commands-and-flags)
@@ -14,8 +14,8 @@ I love Arch Linux and rolling-release distros. Being at the head of Linux kernel
 
 ## Core Features:
 
-- Instant Rollback of -Syu Upgrades
-- The Ability to Track All Additions, Removals, and Upgrades Made to the System
+- Ability to Track All Additions, Removals, and Upgrades Made to the System
+- Rolling System SnapShots
 - Rollback to Arch Archive Dates
 - Native AUR Support
 - Automatically Save and Restore App Config Files
@@ -31,20 +31,16 @@ Pacback offers a few core commands that streamline the process of creating and r
 ### Core Commands
 * -c, --create_rp | Generate a pacback restore point. Takes a restore point # as an argument.\
 **Example: `pacback -c 1`**
-* -f, --full_rp | Generate a pacback full restore point.\
-**Example: `pacback -f -c 1`**
 * -rb, --rollback | Rollback to a previously generated restore point or to an archive date.\
 **Example: `pacback --rollback 1` or `pacback --rollback 2019/08/14`**
-* -Syu, --upgrade | Create a light restore point and run a full system upgrade. Use snapback to restore this version state.\
-**Example: `pacback -Syu`**
-* -sb, --snapback | Rollback packages to the version state stored before that last pacback upgrade.\
-**Example: `pacback --snapback`**
+* -ss, --snapshot | Restore the system to an automaticly created snapshot.\
+**Example: `pacback --snapshot 2`**
 * -pkg, --rollback_pkgs | - Rollback a list of packages looking for old versions on the system.\
-**Example: `pacback -pkg package_1 package_2 package_3`**
-* -u, --unlock_rollback | Release any date rollback locks on /etc/pacman.d/mirrorlist. No argument is needed.\
-**Example: `pacback --unlock_rollback`**
+**Example: `pacback -pkg zsh cpupower neovim`**
 
-### Flags and Utils
+### Flags
+* -f, --full_rp | Generate a pacback full restore point.\
+**Example: `pacback -f -c 1`**
 * -d, --add_dir | Add any custom directories to your restore point during a `--create_rp AND --full_rp`.\
 **Example: `pacback -f -c 1 -d /dir1/to/add /dir2/to/add /dir3/to/add`**
 * -nc, --no_confirm | Skip asking user questions during RP creation. Will answer yes to all.\
@@ -53,10 +49,12 @@ Pacback offers a few core commands that streamline the process of creating and r
 **Example: `pacback -rm 12 -nc`**
 * -n, --notes | Add Custom Notes to Your Metadata File.\
 **Example: `pacback -nc -c 1 -f -n 'Here Are Some Notes'`**
+
+### Utils
 * -ih, --install_hook | Install a Pacman hook that creates a snapback restore point during each Pacman upgrade.\
 **Example: `pacback --install_hook`**
 * -rh, --remove_hook | Remove the Pacman hook that creates a snapback restore point during each Pacman upgrade.\
-**Example: `pacback --remove_hook`**
+**Example: `pacback --remove__hook`**
 * --clean | Clean old and orphaned pacakages along with old Restore Points. Provide the number of package you want keep.\
 **Example: `pacback -rm 3`**
 * -i, --info | Print information about a retore point.\
@@ -182,11 +180,12 @@ Full Restore Points also generate a metadata file but even if you lose or delete
 Restore Point metadata files contain information in a human readable format about packages installed at the time of its creation along with other information. This information is used by Pacback to restore older versions of packages and provide general information about the Restore Point. Each meta data file will look something like this:
 
 > ====== Pacback RP #02 ======  
-Date Created: 2019/12/02  
-Packages Installed: 1038  
-Packages in RP: 0  
-Size of Packages in RP: 0B  
-Pacback Version: 1.3.0  
+Pacback Version: 2.0.0
+Date Created: 2020/03/04
+Time Created: 22:37:54
+Packages Installed: 272
+RP Type: Light RP
+
 ======= Pacman List ========  
 a52dec 0.7.4-10  
 aarch64-linux-gnu-binutils 2.33.1-1  
@@ -219,8 +218,11 @@ If you run into any errors or are about to submit a bug, please check your log f
 - [x] Fix Checksumming
 - [x] AUR Package
 - [x] Improved Internal Documentation
-- [ ] Add Session Locks
-- [ ] Prevent Multiple Snapback Creations During Scripting
-- [ ] Retain Multiple Snapbacks
-- [ ] Better Color Output
+- [x] Add Session and Snapshot Cooldown Lock
+- [x] Retain Multiple Snapshots
+- [x] Better Color Output
+- [ ] Add --diff Command to Compare Two RPs
+- [ ] Improved SigInt Handling
+- [ ] Human Readable TimeLine for SnapShot Changes 
 - [ ] Support for Fetching Single Non-Cached Package Versions
+- [ ] Support for Fetching Multiple Non-Cached Package Versions

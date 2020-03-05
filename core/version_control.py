@@ -5,11 +5,9 @@ import tqdm
 import python_scripts as PS
 import pac_utils as PU
 
-
 #<#><#><#><#><#><#>#<#>#<#
 #<># Version Control
 #<#><#><#><#><#><#>#<#>#<#
-
 
 def migration_check(log_file):
     base_dir = os.path.dirname(os.path.realpath(__file__))[:-5]
@@ -18,7 +16,7 @@ def migration_check(log_file):
     if os.path.exists(old_rp_path):
         # Upgrades Pacbacks File System Structure If Old
         PS.prError('Looks Like You Are Upgrading From A Version Before 1.6!')
-        PS.prWorking('Migrating Your Restore Point Folder Now...')
+        PS.prBold('Migrating Your Restore Point Folder Now...')
         PU.Require_Root()
         PS.Start_Log('MigrationCheck', log_file)
         PS.MK_Dir('/var/lib/pacback', sudo=False)
@@ -74,7 +72,7 @@ def check_pacback_version(current_version, rp_path, meta_exists, meta, log_file)
 
 def upgrade_to_hardlinks(rp_path, log_file):
     # This is a Total Hack Job. Don't Judge Me :(
-    PS.prWorking('Unpacking...')
+    PS.prBold('Unpacking...')
     PS.Write_To_Log('HardlinkUpgrade', 'Unpacking Old Restore Point For Conversion', log_file)
     if os.path.exists(rp_path + '.tar.gz'):
         PS.GZ_D(rp_path + '.tar.gz')

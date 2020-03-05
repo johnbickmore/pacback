@@ -8,11 +8,9 @@ import datetime as dt
 import multiprocessing as mp
 import python_scripts as PS
 
-
 #<#><#><#><#><#><#>#<#>#<#
 #<># Utils For Other Funcs
 #<#><#><#><#><#><#>#<#>#<#
-
 
 def max_threads(thread_cap):
     cores = os.cpu_count()
@@ -173,7 +171,7 @@ def fetch_paccache(rp_paths, log_file):
 
     unique_pkgs = PS.Trim_Dir(fs_list)
     if len(fs_list) != len(unique_pkgs):
-        PS.prWorking('Filtering Duplicate Packages...')
+        PS.prWarning('Filtering Duplicate Packages...')
 
         chunk_size = int(round(len(unique_pkgs) / max_threads(4), 0)) + 1
         unique_pkgs = list(f for f in unique_pkgs)
@@ -289,7 +287,7 @@ def list_all_rps(rp_paths):
     for o in rps:
         PS.prSuccess(o)
     for x in sss:
-        print(x)
+        PS.prBold(x)
 
 
 def remove_rp(rp_num, rp_paths, nc, log_file):
@@ -313,11 +311,13 @@ def remove_rp(rp_num, rp_paths, nc, log_file):
 
 
 def shift_snapshots(max_ss, rp_paths, log_file):
+    PS.Write_To_Log('ShiftSS', 'Shifting SnapShots Forward With a Max of ' + str(max_ss), log_file)
     for x in range((max_ss - 1), -1, -1):
         m_path = rp_paths + '/ss' + str(x).zfill(2) + '.meta'
         if os.path.exists(m_path):
             os.system('sed -i s/#' + str(x).zfill(2) + '/#' + str(x + 1).zfill(2) + '/ ' + m_path)
             os.system('cat ' + m_path + ' > ' + rp_paths + '/ss'+ str(x + 1).zfill(2) + '.meta')
+    PS.Write_To_Log('ShiftSS', 'All SnapShots Shifted Forward', log_file)
 
 
 
@@ -328,7 +328,7 @@ def shift_snapshots(max_ss, rp_paths, log_file):
 
 def clean_cache(count, rp_paths, log_file):
     '''Automated Cache Cleaning Using pacman, paccache, and pacback.'''
-    PS.prWorking('Starting Advanced Cache Cleaning...')
+    PS.prWarning('Starting Advanced Cache Cleaning...')
     if PS.YN_Frame('Do You Want To Uninstall Orphaned Packages?') is True:
         os.system('sudo pacman -R $(pacman -Qtdq)')
         PS.Write_To_Log('CleanCache', 'Ran pacman -Rns $(pacman -Qtdq)', log_file)

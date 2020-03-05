@@ -7,7 +7,6 @@ import datetime as dt
 import python_scripts as PS
 import pac_utils as pu
 
-
 #<#><#><#><#><#><#>#<#>#<#
 #<># Create Restore Point
 #<#><#><#><#><#><#>#<#>#<#
@@ -46,18 +45,18 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
     ###########################
     if rp_full is True:
         PS.Write_To_Log('CreateRP', 'Building RP #' + rp_num + ' As Full RP', log_file)
-        print('Building Full Restore Point...')
+        PS.prBold('Building Full Restore Point...')
 
         # Set Vars For Full RP
         dir_size = 0
         rp_files = set()
         pac_cache = rp_path + '/pac_cache'
 
-        PS.prWorking('Retrieving Current Packages...')
+        PS.prBold('Retrieving Current Packages...')
         pkg_search = PS.Replace_Spaces(pu.pacman_Q())
 
         # Search File System for Pkgs
-        PS.prWorking('Bulk Scanning for ' + str(len(pkg_search)) + ' Packages...')
+        PS.prWarning('Bulk Scanning for ' + str(len(pkg_search)) + ' Packages...')
         found_pkgs = pu.search_paccache(pkg_search, pu.fetch_paccache(rp_paths, log_file), log_file)
         pac_size = PS.Size_Of_Files(found_pkgs)
 
@@ -100,7 +99,7 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
 
             # Compress Custom Files If Added Larger Than 1GB
             if dir_size > 1073741824:
-                PS.prWorking('Compressing Restore Point Files...')
+                PS.prWarning('Compressing Restore Point Files...')
                 if any(re.findall('pigz', l.lower()) for l in pkg_search):
                     os.system('pigz ' + rp_tar + ' -f')
                 else:
@@ -113,7 +112,7 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
             if len(dir_list) > 0:
                 pu.abort_with_log('CreateRP', 'Custom Dirs Are Not Supported By LightRP',
                                   'Light Restore Points DO NOT Support Custom Dirs! Please Use The `-f` Flag', log_file)
-            print('Building Light Restore Point...')
+            PS.prBold('Building Light Restore Point...')
         elif typ == 'ss':
             PS.Write_To_Log('CreateSS', 'Building SnapShot', log_file)
 
