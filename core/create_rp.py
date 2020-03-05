@@ -13,18 +13,18 @@ import pac_utils as pu
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes, rp_paths, log_file):
-    PS.Write_To_Log('CreateRP', 'Reached CreateRP', log_file)
+def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, notes, rp_paths, log_file):
+    PS.Write_To_Log('Create' + typ.upper(), 'Reached Create' + typ.upper(), log_file)
     # Fail Safe for New Users
     if os.path.exists(rp_paths) is False:
         PS.MK_Dir('/var/lib/pacback', sudo=False)
         PS.MK_Dir(rp_paths, sudo=False)
-        PS.Write_To_Log('CreateRP', 'Created Base RP Folder in /var/lib', log_file)
+        PS.Write_To_Log('Create' + typ.upper(), 'Created Base RP Folder in /var/lib', log_file)
 
     # Set Base Vars
     rp_num = str(rp_num).zfill(2)
-    rp_path = rp_paths + '/rp' + rp_num
-    rp_tar = rp_path + '/rp' + rp_num + '_dirs.tar'
+    rp_path = rp_paths + '/'+ typ + rp_num
+    rp_tar = rp_path + '/' + typ + rp_num + '_dirs.tar'
     rp_meta = rp_path + '.meta'
     found_pkgs = set()
     pac_size = 0
@@ -39,13 +39,13 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes, 
 
         PS.RM_File(rp_meta, sudo=False)
         PS.RM_Dir(rp_path, sudo=False)
-        PS.Write_To_Log('CreateRP', 'Removed RP #' + rp_num + ' During Overwrite', log_file)
+        PS.Write_To_Log('CreateRP', 'Removed Previous RP #' + rp_num + ' During Creation', log_file)
 
     ###########################
     # Full Restore Point Branch
     ###########################
     if rp_full is True:
-        PS.Write_To_Log('CreateRP', 'Creating RP #' + rp_num + ' As Full RP', log_file)
+        PS.Write_To_Log('CreateRP', 'Building RP #' + rp_num + ' As Full RP', log_file)
         print('Building Full Restore Point...')
 
         # Set Vars For Full RP
@@ -108,23 +108,35 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes, 
                 PS.Write_To_Log('CreateRP', 'Compressed Custom Files RP Tar', log_file)
 
     elif rp_full is False:
-        PS.Write_To_Log('CreateRP', 'Creating RP #' + rp_num + ' As A Light RP', log_file)
-        if len(dir_list) > 0:
-            pu.abort_with_log('CreateRP', 'Custom Dirs Are Not Supported By LightRP',
-                              'Light Restore Points DO NOT Support Custom Dirs! Please Use The `-f` Flag', log_file)
-        print('Building Light Restore Point...')
+        if typ == 'rp':
+            PS.Write_To_Log('CreateRP', 'Building RP #' + rp_num + ' As A Light RP', log_file)
+            if len(dir_list) > 0:
+                pu.abort_with_log('CreateRP', 'Custom Dirs Are Not Supported By LightRP',
+                                  'Light Restore Points DO NOT Support Custom Dirs! Please Use The `-f` Flag', log_file)
+            print('Building Light Restore Point...')
+        elif typ == 'ss':
+            PS.Write_To_Log('CreateSS', 'Building SnapShot', log_file)
+
 
     #########################
     # Generate Meta Data File
     #########################
     current_pkgs = pu.pacman_Q()
-    meta_list = ['====== Pacback RP #' + rp_num + ' ======',
+    meta_list = ['====== Pacback ' + typ.upper() + ' #' + rp_num + ' ======',
                  'Pacback Version: ' + version,
                  'Date Created: ' + dt.datetime.now().strftime("%Y/%m/%d"),
                  'Time Created: ' + dt.datetime.now().strftime("%H:%M:%S"),
-                 'Packages Installed: ' + str(len(current_pkgs)),
-                 'Packages in RP: ' + str(len(found_pkgs)),
-                 'Size of Packages in RP: ' + PS.Convert_Size(pac_size)]
+                 'Packages Installed: ' + str(len(current_pkgs))]
+
+    if rp_full is True:
+        meta_list.append('RP Type: Full RP')
+        meta_list.append('Packages in RP: ' + str(len(found_pkgs)))
+        meta_list.append('Size of Packages in RP: ' + PS.Convert_Size(pac_size))
+    elif rp_full is False:
+        if typ == 'rp':
+            meta_list.append('RP Type: Light RP')
+        elif typ == 'ss':
+            meta_list.append('RP Type: SnapShot')
 
     if notes:
         meta_list.append('Notes: ' + notes)
@@ -144,6 +156,9 @@ def create_restore_point(version, rp_num, rp_full, dir_list, no_confirm, notes, 
 
     # Export Final Meta Data File
     PS.Export_List(rp_meta, meta_list)
-    PS.Write_To_Log('CreateRP', 'RP #' + rp_num + ' Was Successfully Created', log_file)
-    PS.Write_To_Log('CreateRP', 'Exited CreateRP', log_file)
-    PS.prSuccess('Restore Point #' + rp_num + ' Successfully Created!')
+    PS.Write_To_Log('Create' + typ.upper(), typ.upper() + ' #' + rp_num + ' Was Successfully Created', log_file)
+    PS.Write_To_Log('Create' + typ.upper(), 'Exited Create' + typ.upper(), log_file)
+    if typ == 'ss':
+        PS.prSuccess('SnapShot Successfully Created!')
+    elif typ == 'rp':
+        PS.prSuccess('Restore Point #' + rp_num + ' Successfully Created!')

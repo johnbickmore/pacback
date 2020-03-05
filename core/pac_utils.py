@@ -91,7 +91,7 @@ def sig_catcher(log_file, signum, frame):
 
 def spawn_hook_lock(cooldown, log_file):
     subprocess.Popen('touch /tmp/pacback_hook_lock && sleep ' + str(cooldown) + ' && rm /tmp/pacback_hook_lock', shell=True)
-    PS.Write_To_Log('HookLock', 'Spawned  ' + str(cooldown) + ' Second Hook Cooldown Lock', log_file)
+    PS.Write_To_Log('HookLock', 'Spawned ' + str(cooldown) + ' Second Hook Cooldown Lock', log_file)
 
 
 def spawn_session_lock(log_file):
@@ -104,8 +104,8 @@ def spawn_session_lock(log_file):
 def check_lock(typ, log_file):
     if typ == 'hook':
         if os.path.exists('/tmp/pacback_hook_lock'):
-            abort_with_log('HookLock', 'Aborting: HookLook is Still Cooling Down!',
-                              'Aborting: HookLook is Still Cooling Down!', log_file)
+            abort_with_log('HookLock', 'Aborting: HookLock is Still Cooling Down!',
+                              'Aborting: HookLock is Still Cooling Down!', log_file)
         else:
             PS.Write_To_Log('HookLock', 'Passed Hook Lock Check', log_file)
 
@@ -267,17 +267,29 @@ def print_rp_info(num, rp_paths):
 
 def list_all_rps(rp_paths):
     files = {f for f in PS.Search_FS(rp_paths, 'set') if f.endswith(".meta")}
-    output_list = list()
+    restore_points = list()
+    snapshots = list()
 
     for f in files:
         meta = PS.Read_List(f)
-        output = 'RP# ' + f[-7] + f[-6] + ' - Date: ' + find_in_meta(meta, 'Date Created') + " " + find_in_meta(meta, 'Time Created')
-        output = output + ' - Packages Installed: ' + find_in_meta(meta, 'Packages Installed')
-        output_list.append(str(output))
+        if find_in_meta(meta, 'RP Type') == 'SnapShot':
+            output = 'SS #' + f[-7] + f[-6] + ' - Date: ' + find_in_meta(meta, 'Date Created') + " " + find_in_meta(meta, 'Time Created')
+            output = output + ' - Packages Installed: ' + find_in_meta(meta, 'Packages Installed')
+            output = output + ' - Type: ' + find_in_meta(meta, 'RP Type')
+            snapshots.append(str(output))
 
-    ou = sorted(output_list)
-    for o in ou:
+        else:
+            output = 'RP #' + f[-7] + f[-6] + ' - Date: ' + find_in_meta(meta, 'Date Created') + " " + find_in_meta(meta, 'Time Created')
+            output = output + ' - Packages Installed: ' + find_in_meta(meta, 'Packages Installed')
+            output = output + ' - Type: ' + find_in_meta(meta, 'RP Type')
+            restore_points.append(str(output))
+
+    rps = sorted(restore_points)
+    sss = sorted(snapshots)
+    for o in rps:
         PS.prSuccess(o)
+    for x in sss:
+        print(x)
 
 
 def remove_rp(rp_num, rp_paths, nc, log_file):
@@ -298,6 +310,15 @@ def remove_rp(rp_num, rp_paths, nc, log_file):
         PS.RM_Dir(rp[:-5], sudo=False)
         PS.prSuccess('Restore Point Removed!')
         PS.Write_To_Log('RemoveRP', 'Removed Restore Point ' + rp_num, log_file)
+
+
+def shift_snapshots(max_ss, rp_paths, log_file):
+    for x in range((max_ss - 1), -1, -1):
+        m_path = rp_paths + '/ss' + str(x).zfill(2) + '.meta'
+        if os.path.exists(m_path):
+            os.system('sed -i s/#' + str(x).zfill(2) + '/#' + str(x + 1).zfill(2) + '/ ' + m_path)
+            os.system('cat ' + m_path + ' > ' + rp_paths + '/ss'+ str(x + 1).zfill(2) + '.meta')
+
 
 
 #<#><#><#><#><#><#>#<#>#<#

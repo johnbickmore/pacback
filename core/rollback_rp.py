@@ -98,15 +98,15 @@ def rollback_to_date(date, log_file):
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def rollback_to_rp(version, rp_num, rp_paths, log_file):
-    PS.Write_To_Log('RollbackRP', 'Reached RollbackRP', log_file)
+def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
+    PS.Write_To_Log('Rollback' + typ.upper(), 'Reached Rollback' + typ.upper(), log_file)
 
     #####################
     # Stage Rollback Vars
     #####################
     rp_num = str(rp_num).zfill(2)
-    rp_path = rp_paths + '/rp' + rp_num
-    rp_tar = rp_path + '/rp' + rp_num + '_dirs.tar'
+    rp_path = rp_paths + '/' + typ + rp_num
+    rp_tar = rp_path + '/' + typ + rp_num + '_dirs.tar'
     rp_meta = rp_path + '.meta'
     current_pkgs = pu.pacman_Q()
 
@@ -116,12 +116,15 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
         PS.Write_To_Log('RollbackRP', 'RP #' + rp_num + ' Is Full RP', log_file)
     else:
         full_rp = False
-        PS.Write_To_Log('RollbackRP', 'RP #' + rp_num + ' Is Light RP', log_file)
+        if typ == 'rp':
+            PS.Write_To_Log('RollbackRP', 'RP #' + rp_num + ' Is Light RP', log_file)
+        elif typ == 'ss':
+            PS.Write_To_Log('RollbackSS', 'SnapShot Detected', log_file)
 
     # Set Meta Status, Read Meta, Diff Packages, Set Vars
     if os.path.exists(rp_meta):
         meta_exists = True
-        PS.Write_To_Log('RollbackRP', 'RP #' + rp_num + ' Has MetaData', log_file)
+        PS.Write_To_Log('Rollback' + typ.upper(), 'Metadata Found for ' + typ.upper() + ' #' + rp_num, log_file)
         meta = PS.Read_List(rp_meta)
         meta_dirs = PS.Read_Between('= Dir List =', '= Pacman List =', meta, re_flag=True)[:-1]
         meta_old_pkgs = PS.Read_Between('= Pacman List =', '<Endless>', meta, re_flag=True)
@@ -132,17 +135,21 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
         current_pkg_strp = {pkg.split(' ')[0] for pkg in current_pkgs}
         added_pkgs = set(current_pkg_strp - meta_old_pkg_strp)
         m_search = PS.Replace_Spaces(changed_pkgs)
-        PS.Write_To_Log('RollbackRP', 'Finished Reading RP MetaData', log_file)
+        PS.Write_To_Log('Rollback' + typ.upper(), 'Finished Reading ' + typ.upper() + ' MetaData', log_file)
 
     else:
         meta_exists = False
         meta = None
-        PS.Write_To_Log('RollbackRP', 'RP #' + rp_num + ' Is Missing MetaData', log_file)
+        PS.Write_To_Log('Rollback'+ typ.upper(), 'RP #' + rp_num + ' Is Missing MetaData', log_file)
 
     # Abort If No Files Are Found
     if meta_exists is False and full_rp is False:
-        pu.abort_with_log('RollbackRP', 'Restore Point #' + rp_num + ' Was NOT FOUND!',
-                          'Restore Point #' + rp_num + ' Was NOT FOUND!', log_file)
+        if typ == 'rp':
+            pu.abort_with_log('RollbackRP', 'Restore Point #' + rp_num + ' Was NOT FOUND!',
+                              'Restore Point #' + rp_num + ' Was NOT FOUND!', log_file)
+        elif typ == 'ss':
+            pu.abort_with_log('RollbackSS', 'SnapShot #' + rp_num + ' Was NOT FOUND!',
+                              'SnapShot #' + rp_num + ' Was NOT FOUND!', log_file)
 
     # Compare Versions
     vc.check_pacback_version(version, rp_path, meta_exists, meta, log_file)
@@ -155,7 +162,7 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
             # Pass If No Packages Have Changed
             if len(changed_pkgs) > 0:
                 PS.Write_To_Log('RollbackRP', str(len(changed_pkgs)) + ' Packages Have Been Changed', log_file)
-                found_pkgs = pu.search_paccache(m_search, pu.fetch_paccache())
+                found_pkgs = pu.search_paccache(m_search, pu.fetch_paccache(rp_paths, log_file), log_file)
                 PS.pacman(' '.join(found_pkgs), '-U')
                 PS.Write_To_Log('RollbackRP', 'Send Found Packages to pacman -U', log_file)
             else:
@@ -178,10 +185,10 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
         # Pass If No Packages Have Changed
         if len(changed_pkgs) > 0:
             PS.prWorking('Bulk Scanning for ' + str(len(meta_old_pkgs)) + ' Packages...')
-            found_pkgs = pu.search_paccache(m_search, pu.fetch_paccache())
+            found_pkgs = pu.search_paccache(m_search, pu.fetch_paccache(rp_paths, log_file), log_file)
         else:
             PS.prSuccess('No Packages Have Been Changed!')
-            PS.Write_To_Log('RollbackRP', 'No Packages Have Been Changed', log_file)
+            PS.Write_To_Log('Rollback' + typ.upper(), 'No Packages Have Been Changed', log_file)
             found_pkgs = {}
 
         if len(changed_pkgs) == 0:
@@ -190,13 +197,13 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
         # Pass Comparison if All Packages Found
         elif len(found_pkgs) == len(changed_pkgs):
             PS.prSuccess('All Packages Found In Your Local File System!')
-            PS.Write_To_Log('RollbackRP', 'All Packages Found', log_file)
+            PS.Write_To_Log('Rollback' + typ.upper(), 'All Packages Found', log_file)
             PS.pacman(' '.join(found_pkgs), '--needed -U')
-            PS.Write_To_Log('RollbackRP', 'Sent Found Packages To pacman -U', log_file)
+            PS.Write_To_Log('Rollback' + typ.upper(), 'Sent Found Packages To pacman -U', log_file)
 
         # Branch if Packages are Missing
         elif len(found_pkgs) < len(changed_pkgs):
-            PS.Write_To_Log('RollbackRP', str(len(found_pkgs) - len(changed_pkgs)) + ' Packages Are Where Not Found', log_file)
+            PS.Write_To_Log('Rollback' + typ.upper(), str(len(found_pkgs) - len(changed_pkgs)) + ' Packages Are Where Not Found', log_file)
             missing_pkg = set(m_search - pu.trim_pkg_list(found_pkgs))
 
             # Show Missing Pkgs
@@ -206,23 +213,23 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
 
             if PS.YN_Frame('Do You Want To Continue Anyway?') is True:
                 PS.pacman(' '.join(found_pkgs), '-U')
-                PS.Write_To_Log('RollbackRP', 'Sent Found Packages To pacman -U', log_file)
+                PS.Write_To_Log('Rollback' + typ.upper(), 'Sent Found Packages To pacman -U', log_file)
             else:
-                pu.abort_with_log('RollbackRP', 'User Aborted Rollback Because of Missing Packages',
+                pu.abort_with_log('Rollback' + typ.upper(), 'User Aborted Rollback Because of Missing Packages',
                                   'Aborting Rollback!', log_file)
 
     # Ask User If They Want to Remove New Packages
     if len(added_pkgs) > 0:
-        PS.prWarning('The Following Packages Are Installed But Are NOT Present in Restore Point #' + rp_num + ':')
-        PS.Write_To_Log('RollbackRP', str(len(added_pkgs)) + ' Have Been Added Since RP Creation', log_file)
+        PS.prWarning('The Following Packages Are Installed But Are NOT Present in ' + typ.upper() + ' #' + rp_num + ':')
+        PS.Write_To_Log('Rollback' + typ.upper(), str(len(added_pkgs)) + 'PKGs Have Been Added Since ' + typ.upper() + ' Creation', log_file)
         for pkg in added_pkgs:
             PS.prAdded(pkg)
         if PS.YN_Frame('Do You Want to Remove These Packages From Your System?') is True:
             PS.pacman(' '.join(added_pkgs), '-R')
-            PS.Write_To_Log('RollbackRP', 'Sent Added Packages To pacman -R', log_file)
+            PS.Write_To_Log('Rollback' + typ.upper(), 'Sent Added Packages To pacman -R', log_file)
     else:
         PS.prSuccess('No Packages Have Been Added!')
-        PS.Write_To_Log('RollbackRP', 'No Packages Have Been Added Since RP Creation', log_file)
+        PS.Write_To_Log('Rollback' + typ.upper(), 'No Packages Have Been Added Since ' + typ.upper() + ' Creation', log_file)
 
     ########################
     # Stage Custom File Diff
@@ -365,7 +372,10 @@ def rollback_to_rp(version, rp_num, rp_paths, log_file):
                 PS.prSuccess('File Diff and Restore Complete!')
 
     else:
-        PS.prSuccess('Rollback to Restore Point #' + rp_num + ' Complete!')
-        PS.Write_To_Log('RollbackRP', 'Rollback to RP #' + rp_num + ' Complete', log_file)
+        PS.Write_To_Log('Rollback' + typ.upper(), 'Rollback to ' + typ.upper() + ' #' + rp_num + ' Complete', log_file)
+        if typ == 'rp':
+            PS.prSuccess('Rollback to Restore Point #' + rp_num + ' Complete!')
+        elif typ == 'ss':
+            PS.prSuccess('Rollback to SnapShot #' + rp_num + ' Complete!')
 
-    PS.Write_To_Log('RollbackRP', 'Exited RollbackRP', log_file)
+    PS.Write_To_Log('Rollback' + typ.upper(), ' Exited Rollback', log_file)
