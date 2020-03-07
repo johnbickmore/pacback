@@ -192,10 +192,10 @@ a52dec 0.7.4-10
 aarch64-linux-gnu-binutils 2.33.1-1  
 aarch64-linux-gnu-gcc 9.2.0-1  
 aarch64-linux-gnu-glibc 2.30-1  
-aarch64-linux-gnu-linux-api-headers 4.20-1
-.......
-....
-..
+aarch64-linux-gnu-linux-api-headers 4.20-1\
+.......\
+....\
+..\
 
 ------------------
 
