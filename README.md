@@ -195,7 +195,7 @@ aarch64-linux-gnu-glibc 2.30-1
 aarch64-linux-gnu-linux-api-headers 4.20-1\
 .......\
 ....\
-..\
+..
 
 ------------------
 
