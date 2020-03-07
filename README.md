@@ -50,7 +50,7 @@ Pacback offers a few core commands that streamline the process of creating and r
 * -n, --notes | Add Custom Notes to Your Metadata File.\
 **Example: `pacback -nc -c 1 -f -n 'Here Are Some Notes'`**
 
-### Info Show
+### Print Info
 * -i, --info | Print information about a retore point.\
 * **Example: `pacback -i 1`**
 * -ls, --list | List information about all Restore Points and Snapshots.\
@@ -75,11 +75,11 @@ Pacback offers a few core commands that streamline the process of creating and r
 ## Install Instructions:
 Pacback offers two AUR packages. (Special thanks to [Attila Greguss](https://github.com/Gr3q) for maintaining them.)
 
-*Don't forget to run **`sudo pacback --install_hook`** after installing!*
-
 [pacback](https://aur.archlinux.org/packages/pacback): This is the recommended install for most users. Releases mark stable points in Pacbacks development, preventing unnecessary upgrades/changes that may introduce instability into production machines. 
 
 [pacback-git](https://aur.archlinux.org/packages/pacback-git): This package fetches the latest version from git. The master branch will be unstable periodically but is ideal for anyone looking to contribute to pacbacks development or if you want access to the latest features and patches.
+
+>*Don't forget to run **`sudo pacback --install_hook`** after installing!*
 
 ### Upgrading From Git to AUR:
 If you are upgrading from a cloned git repo please follow these steps.
@@ -103,7 +103,7 @@ One of the problems with rolling releases is you never know when a problem might
 1. Install the Pacback hook  with: `pacback --install_hook`
 2. Make a series of changes to your system: `pacman -S tree && pacman -S rsync`
 3. Run `pacback -ls` and you should see `SS #00` and `SS #01`. Each time you make a change (add, remove, upgrade package) a snapshot will be created during the transaction.
-4. Remove the rsync pacakge by restoring snapshot #00 OR remove both rsync and tree by restoring snapshot #01.
+4. Remove the rsync pacakge by restoring `SS #00` OR remove both rsync and tree by restoring `SS #01`.
 
 ![Pacback Snapback]()
 
@@ -181,19 +181,21 @@ Full Restore Points also generate a metadata file but even if you lose or delete
 Restore Point metadata files contain information in a human readable format about packages installed at the time of its creation along with other information. This information is used by Pacback to restore older versions of packages and provide general information about the Restore Point. Each meta data file will look something like this:
 
 > ====== Pacback RP #02 ======  
-Pacback Version: 2.0.0
-Date Created: 2020/03/04
-Time Created: 22:37:54
-Packages Installed: 272
-RP Type: Light RP
->
->======= Pacman List ========  
+Pacback Version: 2.0.0\
+Date Created: 2020/03/04\
+Time Created: 22:37:54\
+Packages Installed: 272\
+RP Type: Light RP\
+\
+======= Pacman List ========  
 a52dec 0.7.4-10  
 aarch64-linux-gnu-binutils 2.33.1-1  
 aarch64-linux-gnu-gcc 9.2.0-1  
 aarch64-linux-gnu-glibc 2.30-1  
 aarch64-linux-gnu-linux-api-headers 4.20-1
-
+.......
+....
+..
 
 ------------------
 
