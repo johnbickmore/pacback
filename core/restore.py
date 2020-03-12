@@ -5,15 +5,14 @@ import tqdm
 import multiprocessing as mp
 import python_scripts as PS
 import pac_utils as pu
-import version_control as vc
-
+import usr_utils as uu
 
 #<#><#><#><#><#><#>#<#>#<#
 #<># User Defined Rollback
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def rollback_packages(pkg_list, rp_paths, log_file):
+def packages(pkg_list, rp_paths, log_file):
     '''Allows User to Rollback Any Number of Packages By Name'''
     PS.Write_To_Log('UserSearch', 'Reached UserSearch', log_file)
     PS.prBold('Searching File System for Packages...')
@@ -53,7 +52,7 @@ def rollback_packages(pkg_list, rp_paths, log_file):
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def rollback_to_date(date, log_file):
+def archive_date(date, log_file):
     PS.Write_To_Log('RollbackToDate','Reached RollbackToDate', log_file)
     # Validate Date Fromat and Build New URL
     if not re.findall(r'([12]\d{3}/(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01]))', date):
@@ -94,11 +93,11 @@ def rollback_to_date(date, log_file):
 
 
 #<#><#><#><#><#><#>#<#>#<#
-#<># Rollback to RP
+#<># Rollback
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
+def restore(typ, version, rp_num, rp_paths, log_file):
     PS.Write_To_Log('Rollback' + typ.upper(), 'Reached Rollback' + typ.upper(), log_file)
 
     #####################
@@ -152,7 +151,7 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
                               'SnapShot #' + rp_num + ' Was NOT FOUND!', log_file)
 
     # Compare Versions
-    vc.check_pacback_version(version, rp_path, meta_exists, meta, log_file)
+    uu.compare_version(version, rp_path, meta_exists, meta, log_file)
 
     ####################
     # Full Restore Point
@@ -379,3 +378,11 @@ def rollback_to_rp(typ, version, rp_num, rp_paths, log_file):
             PS.prSuccess('Rollback to SnapShot #' + rp_num + ' Complete!')
 
     PS.Write_To_Log('Rollback' + typ.upper(), ' Exited Rollback', log_file)
+
+
+def snapshot(version, rp_num, rp_paths, log_file):
+    restore('ss', version, rp_num, rp_paths, log_file)
+
+
+def restore_point(version, rp_num, rp_paths, log_file):
+    restore('rp', version, rp_num, rp_paths, log_file)

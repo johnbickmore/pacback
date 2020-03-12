@@ -7,12 +7,13 @@ import datetime as dt
 import python_scripts as PS
 import pac_utils as pu
 
+
 #<#><#><#><#><#><#>#<#>#<#
-#<># Create Restore Point
+#<># Create
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, notes, rp_paths, log_file):
+def create(typ, version, rp_num, rp_full, dir_list, no_confirm, label, rp_paths, log_file):
     PS.Write_To_Log('Create' + typ.upper(), 'Reached Create' + typ.upper(), log_file)
     # Fail Safe for New Users
     if os.path.exists(rp_paths) is False:
@@ -22,7 +23,7 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
 
     # Set Base Vars
     rp_num = str(rp_num).zfill(2)
-    rp_path = rp_paths + '/'+ typ + rp_num
+    rp_path = rp_paths + '/' + typ + rp_num
     rp_tar = rp_path + '/' + typ + rp_num + '_dirs.tar'
     rp_meta = rp_path + '.meta'
     found_pkgs = set()
@@ -40,9 +41,9 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
         PS.RM_Dir(rp_path, sudo=False)
         PS.Write_To_Log('CreateRP', 'Removed Previous RP #' + rp_num + ' During Creation', log_file)
 
-    ###########################
-    # Full Restore Point Branch
-    ###########################
+    ####################
+    # Full Restore Point
+    ####################
     if rp_full is True:
         PS.Write_To_Log('CreateRP', 'Building RP #' + rp_num + ' As Full RP', log_file)
         PS.prBold('Building Full Restore Point...')
@@ -116,7 +117,6 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
         elif typ == 'ss':
             PS.Write_To_Log('CreateSS', 'Building SnapShot', log_file)
 
-
     #########################
     # Generate Meta Data File
     #########################
@@ -137,8 +137,8 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
         elif typ == 'ss':
             meta_list.append('RP Type: SnapShot')
 
-    if notes:
-        meta_list.append('Notes: ' + notes)
+    if label:
+        meta_list.append('Label: ' + label)
 
     if len(dir_list) != 0:
         meta_list.append('Dirs File Count: ' + str(len(rp_files)))
@@ -161,3 +161,14 @@ def create_restore_point(typ, version, rp_num, rp_full, dir_list, no_confirm, no
         PS.prSuccess('SnapShot Successfully Created!')
     elif typ == 'rp':
         PS.prSuccess('Restore Point #' + rp_num + ' Successfully Created!')
+
+
+def snapshot(version, max_snapshots, hook_cooldown, rp_paths, log_file):
+    pu.check_lock('hook', log_file)
+    pu.shift_snapshots(max_snapshots, rp_paths, log_file)
+    create('ss', version, 0, False, [], True, False, rp_paths, log_file)
+    pu.fork_hook_lock(hook_cooldown, log_file)
+
+
+def restore_point(version, rp_num, rp_full, dir_list, no_confirm, label, rp_paths, log_file):
+    create('rp', version, rp_num, rp_full, dir_list, no_confirm, label, rp_paths, log_file)

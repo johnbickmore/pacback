@@ -4,13 +4,14 @@ import re
 import itertools
 import subprocess
 import sys
-import datetime as dt
 import multiprocessing as mp
 import python_scripts as PS
+
 
 #<#><#><#><#><#><#>#<#>#<#
 #<># Utils For Other Funcs
 #<#><#><#><#><#><#>#<#>#<#
+
 
 def max_threads(thread_cap):
     cores = os.cpu_count()
@@ -56,7 +57,7 @@ def find_in_meta(meta_data, key):
         if m.split(':')[0] == key:
             value = ':'.join(m.split(':')[1:]).strip()
             return value
-    return ""
+    return False
 
 
 def abort_with_log(func, output, message, log_file):
@@ -69,6 +70,7 @@ def abort_with_log(func, output, message, log_file):
 def require_root(log_file):
     '''Abort if not root.'''
     if PS.Am_I_Root() is True:
+        PS.Start_Log('PacbackMain', log_file)
         PS.Write_To_Log('RootCheck', 'Passed Root Check', log_file)
         return
     else:
@@ -82,17 +84,97 @@ def sig_catcher(log_file, signum, frame):
     abort_with_log('SIGINT', 'Caught SIGINT ' + str(signum), '\n Attempting Clean Exit', log_file)
 
 
+def shift_snapshots(max_ss, rp_paths, log_file):
+    PS.Write_To_Log('ShiftSS', 'Shifting SnapShots Forward With a Max of ' + str(max_ss), log_file)
+    for x in range((max_ss - 1), -1, -1):
+        m_path = rp_paths + '/ss' + str(x).zfill(2) + '.meta'
+        if os.path.exists(m_path):
+            os.system('sed -i s/#' + str(x).zfill(2) + '/#' + str(x + 1).zfill(2) + '/ ' + m_path)
+            os.system('mv ' + m_path + ' ' + rp_paths + '/ss'+ str(x + 1).zfill(2) + '.meta')
+    PS.Write_To_Log('ShiftSS', 'All SnapShots Shifted Forward', log_file)
+
+
 #<#><#><#><#><#><#>#<#>#<#
-#<># Session State Management
+#<># Pacman Utils
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def spawn_hook_lock(cooldown, log_file):
+def pacman_Q():
+    '''Writes the output into /tmp, reads file, then removes file.'''
+    os.system("pacman -Q > /tmp/pacman_q.meta")
+    ql = PS.Read_List('/tmp/pacman_q.meta', typ='set')
+    PS.RM_File('/tmp/pacman_q.meta', sudo=True)
+    return ql
+
+
+def fetch_paccache(rp_paths, log_file):
+    '''Always returns a unique list of pkgs found on the file sys.'''
+    thread_cap = 4
+
+    # Searches File System For Packages
+    pacman_cache = find_pkgs_in_dir('/var/cache/pacman/pkg')
+    root_cache = find_pkgs_in_dir('/root/.cache')
+    pacback_cache = find_pkgs_in_dir(rp_paths)
+    user_cache = set()
+    users = os.listdir('/home')
+
+    for u in users:
+        u_pkgs = find_pkgs_in_dir('/home/' + u + '/.cache')
+        user_cache = user_cache.union(u_pkgs)
+
+    fs_list = pacman_cache.union(root_cache, pacback_cache, user_cache)
+    PS.Write_To_Log('FetchPaccache', 'Searched ALL Package Cache Locations', log_file)
+
+    unique_pkgs = PS.Trim_Dir(fs_list)
+    if len(fs_list) != len(unique_pkgs):
+        PS.prWarning('Filtering Duplicate Packages...')
+
+        chunk_size = int(round(len(unique_pkgs) / max_threads(thread_cap), 0)) + 1
+        unique_pkgs = list(f for f in unique_pkgs)
+        chunks = [unique_pkgs[i:i + chunk_size] for i in range(0, len(unique_pkgs), chunk_size)]
+
+        with mp.Pool(processes=max_threads(thread_cap)) as pool:
+            new_fs = pool.starmap(first_pkg_path, zip(chunks, itertools.repeat(fs_list)))
+            new_fs = set(itertools.chain(*new_fs))
+
+        PS.Write_To_Log('FetchPaccache', 'Returned ' + str(len(new_fs)) + ' Unique Cache Packages', log_file)
+        return new_fs
+
+    else:
+        PS.Write_To_Log('FetchPaccache', 'Returned ' + str(len(fs_list)) + ' Cached Packages', log_file)
+        return fs_list
+
+
+def search_paccache(pkg_list, fs_list, log_file):
+    '''Searches cache for matching pkg versions and returns results.'''
+    thread_cap = 4
+
+    # Combing package names into one term provides much faster results
+    PS.Write_To_Log('SearchPaccache', 'Started Search for ' + str(len(pkg_list)) + ' Packages', log_file)
+    bulk_search = ('|'.join(list(re.escape(pkg) for pkg in pkg_list)))
+    chunk_size = int(round(len(fs_list) / max_threads(thread_cap), 0)) + 1
+    fs_list = list(f for f in fs_list)
+    chunks = [fs_list[i:i + chunk_size] for i in range(0, len(fs_list), chunk_size)]
+
+    with mp.Pool(processes=max_threads(thread_cap)) as pool:
+        found_pkgs = pool.starmap(search_pkg_chunk, zip(itertools.repeat(bulk_search), chunks))
+        found_pkgs = set(itertools.chain(*found_pkgs))
+
+    PS.Write_To_Log('SearchPaccache', 'Found ' + str(len(found_pkgs)) + ' OUT OF ' + str(len(pkg_list)) + ' Packages', log_file)
+    return found_pkgs
+
+
+#<#><#><#><#><#><#>#<#>#<#
+#<># Session Management
+#<#><#><#><#><#><#>#<#>#<#
+
+
+def fork_hook_lock(cooldown, log_file):
     subprocess.Popen('touch /tmp/pacback_hook_lock && sleep ' + str(cooldown) + ' && rm /tmp/pacback_hook_lock', shell=True)
     PS.Write_To_Log('HookLock', 'Spawned ' + str(cooldown) + ' Second Hook Cooldown Lock', log_file)
 
 
-def spawn_session_lock(log_file):
+def fork_session_lock(log_file):
     pid = os.getpid()
     os.system('touch /tmp/pacback_session_lock')
     subprocess.Popen('while ps -p ' + str(pid) + ' > /dev/null; do sleep 1; done; rm /tmp/pacback_session_lock', shell=True)
@@ -113,98 +195,6 @@ def check_lock(typ, log_file):
                               'Aborting: Pacback Already Has An Active Session Lock', log_file)
         else:
             PS.Write_To_Log('SessionLock', 'Passed Session Lock Check', log_file)
-
-
-#<#><#><#><#><#><#>#<#>#<#
-#<># Pacman Utils
-#<#><#><#><#><#><#>#<#>#<#
-
-
-def user_pkg_search(search_pkg, cache):
-    '''Provides more accurate searches for single pkg names without a version.'''
-    pkgs = trim_pkg_list(cache)
-    found = set()
-
-    for p in pkgs:
-        r = re.split("\d+-\d+|\d+(?:\.\d+)+|\d:\d+(?:\.\d+)+", p)[0]
-        if r.strip()[-1] == '-':
-            x = r.strip()[:-1]
-        else:
-            x = r
-        if re.fullmatch(re.escape(search_pkg.lower().strip()), x):
-            found.add(p)
-
-    if not found:
-        PS.prError('No Packages Found!')
-        if PS.YN_Frame('Do You Want to Extend the Regex Search?') is True:
-            for p in pkgs:
-                if re.findall(re.escape(search_pkg.lower().strip()), p):
-                    found.add(p)
-
-    return found
-
-
-def pacman_Q():
-    '''Writes the output into /tmp, reads file, then removes file.'''
-    os.system("pacman -Q > /tmp/pacman_q.meta")
-    ql = PS.Read_List('/tmp/pacman_q.meta', typ='set')
-    PS.RM_File('/tmp/pacman_q.meta', sudo=True)
-    return ql
-
-
-def fetch_paccache(rp_paths, log_file):
-    '''Always returns a unique list of pkgs found on the file sys.'''
-
-    # Searches File System For Packages
-    pacman_cache = find_pkgs_in_dir('/var/cache/pacman/pkg')
-    root_cache = find_pkgs_in_dir('/root/.cache')
-    pacback_cache = find_pkgs_in_dir(rp_paths)
-    user_cache = set()
-    users = os.listdir('/home')
-
-    for u in users:
-        u_pkgs = find_pkgs_in_dir('/home/' + u + '/.cache')
-        user_cache = user_cache.union(u_pkgs)
-
-    fs_list = pacman_cache.union(root_cache, pacback_cache, user_cache)
-    PS.Write_To_Log('FetchPaccache', 'Searched ALL Package Cache Locations', log_file)
-
-    unique_pkgs = PS.Trim_Dir(fs_list)
-    if len(fs_list) != len(unique_pkgs):
-        PS.prWarning('Filtering Duplicate Packages...')
-
-        chunk_size = int(round(len(unique_pkgs) / max_threads(4), 0)) + 1
-        unique_pkgs = list(f for f in unique_pkgs)
-        chunks = [unique_pkgs[i:i + chunk_size] for i in range(0, len(unique_pkgs), chunk_size)]
-
-        with mp.Pool(processes=max_threads(4)) as pool:
-            new_fs = pool.starmap(first_pkg_path, zip(chunks, itertools.repeat(fs_list)))
-            new_fs = set(itertools.chain(*new_fs))
-
-        PS.Write_To_Log('FetchPaccache', 'Returned ' + str(len(new_fs)) + ' Unique Cache Packages', log_file)
-        return new_fs
-
-    else:
-        PS.Write_To_Log('FetchPaccache', 'Returned ' + str(len(fs_list)) + ' Cached Packages', log_file)
-        return fs_list
-
-
-def search_paccache(pkg_list, fs_list, log_file):
-    '''Searches cache for matching pkg versions and returns results.'''
-    PS.Write_To_Log('SearchPaccache', 'Started Search for ' + str(len(pkg_list)) + ' Packages', log_file)
-
-    # Combing package names into one term provides much faster results
-    bulk_search = ('|'.join(list(re.escape(pkg) for pkg in pkg_list)))
-    chunk_size = int(round(len(fs_list) / max_threads(4), 0)) + 1
-    fs_list = list(f for f in fs_list)
-    chunks = [fs_list[i:i + chunk_size] for i in range(0, len(fs_list), chunk_size)]
-
-    with mp.Pool(processes=max_threads(4)) as pool:
-        found_pkgs = pool.starmap(search_pkg_chunk, zip(itertools.repeat(bulk_search), chunks))
-        found_pkgs = set(itertools.chain(*found_pkgs))
-
-    PS.Write_To_Log('SearchPaccache', 'Found ' + str(len(found_pkgs)) + ' OUT OF ' + str(len(pkg_list)) + ' Packages', log_file)
-    return found_pkgs
 
 
 #<#><#><#><#><#><#>#<#>#<#
@@ -242,131 +232,34 @@ def pacman_hook(install, log_file):
 
 
 #<#><#><#><#><#><#>#<#>#<#
-#<># RP Management
+#<># Version Control
 #<#><#><#><#><#><#>#<#>#<#
 
 
-def print_rp_info(num, rp_paths):
-    rp_meta = rp_paths + '/rp' + num + '.meta'
-    if os.path.exists(rp_meta):
-        meta = PS.Read_List(rp_meta)
-        meta = PS.Read_Between('Pacback RP', 'Pacman List', meta, re_flag=True)
-        print('============================')
-        for s in meta[:-1]:
-            print(s)
-        print('============================')
+def compare_version(current_version, rp_path, meta_exists, meta, log_file):
+    if meta_exists is False:
+        PS.Write_To_Log('VersionControl', 'Restore Point is Missing MetaData', log_file)
 
-    elif os.path.exists(rp_meta):
-        PS.prError('Meta is Missing For This Restore Point!')
+    elif meta_exists is True:
+        target_version = find_in_meta(meta, 'Pacback Version')
 
-    else:
-        PS.prError('No Restore Point #' + num + ' Was NOT Found!')
+        # Parse version into vars
+        cv_M = int(current_version.split('.')[0])
+        cv_m = int(current_version.split('.')[1])
+        cv_p = int(current_version.split('.')[2])
+        ####
+        tv_M = int(target_version.split('.')[0])
+        tv_m = int(target_version.split('.')[1])
+        tv_p = int(target_version.split('.')[2])
 
-
-def list_all_rps(rp_paths):
-    files = {f for f in PS.Search_FS(rp_paths, 'set') if f.endswith(".meta")}
-    restore_points = list()
-    snapshots = list()
-
-    for f in files:
-        meta = PS.Read_List(f)
-        if find_in_meta(meta, 'RP Type') == 'SnapShot':
-            output = 'SS #' + f[-7] + f[-6] + ' - Date: ' + find_in_meta(meta, 'Date Created') + " " + find_in_meta(meta, 'Time Created')
-            output = output + ' - Packages Installed: ' + find_in_meta(meta, 'Packages Installed')
-            output = output + ' - Type: ' + find_in_meta(meta, 'RP Type')
-            snapshots.append(str(output))
-
+        if current_version != target_version:
+            PS.Write_To_Log('VersionControl', 'Current Version ' + current_version + ' Miss-Matched With ' + target_version, log_file)
         else:
-            output = 'RP #' + f[-7] + f[-6] + ' - Date: ' + find_in_meta(meta, 'Date Created') + " " + find_in_meta(meta, 'Time Created')
-            output = output + ' - Packages Installed: ' + find_in_meta(meta, 'Packages Installed')
-            output = output + ' - Type: ' + find_in_meta(meta, 'RP Type')
-            restore_points.append(str(output))
+            PS.Write_To_Log('VersionControl', 'Both Versions Match ' + current_version, log_file)
 
-    rps = sorted(restore_points)
-    sss = sorted(snapshots)
-    for o in rps:
-        PS.prSuccess(o)
-    for x in sss:
-        PS.prBold(x)
-
-
-def remove_rp(rp_num, rp_paths, nc, log_file):
-    rp = rp_paths + '/rp' + rp_num + '.meta'
-    print_rp_info(rp_num, rp_paths)
-
-    if nc is False:
-        if PS.YN_Frame('Do You Want to Remove This Restore Point?') is True:
-            PS.RM_File(rp, sudo=False)
-            PS.RM_Dir(rp[:-5], sudo=False)
-            PS.prSuccess('Restore Point Removed!')
-            PS.Write_To_Log('RemoveRP', 'Removed Restore Point ' + rp_num, log_file)
-        else:
-            PS.Write_To_Log('RemoveRP', 'User Declined Removing Restore Point ' + rp_num, log_file)
-
-    elif nc is True:
-        PS.RM_File(rp, sudo=False)
-        PS.RM_Dir(rp[:-5], sudo=False)
-        PS.prSuccess('Restore Point Removed!')
-        PS.Write_To_Log('RemoveRP', 'Removed Restore Point ' + rp_num, log_file)
-
-
-def shift_snapshots(max_ss, rp_paths, log_file):
-    PS.Write_To_Log('ShiftSS', 'Shifting SnapShots Forward With a Max of ' + str(max_ss), log_file)
-    for x in range((max_ss - 1), -1, -1):
-        m_path = rp_paths + '/ss' + str(x).zfill(2) + '.meta'
-        if os.path.exists(m_path):
-            os.system('sed -i s/#' + str(x).zfill(2) + '/#' + str(x + 1).zfill(2) + '/ ' + m_path)
-            os.system('cat ' + m_path + ' > ' + rp_paths + '/ss'+ str(x + 1).zfill(2) + '.meta')
-    PS.Write_To_Log('ShiftSS', 'All SnapShots Shifted Forward', log_file)
-
-
-
-#<#><#><#><#><#><#>#<#>#<#
-#<># Better Cache Cleaning
-#<#><#><#><#><#><#>#<#>#<#
-
-
-def clean_cache(count, rp_paths, log_file):
-    '''Automated Cache Cleaning Using pacman, paccache, and pacback.'''
-    PS.prWarning('Starting Advanced Cache Cleaning...')
-    if PS.YN_Frame('Do You Want To Uninstall Orphaned Packages?') is True:
-        os.system('sudo pacman -R $(pacman -Qtdq)')
-        PS.Write_To_Log('CleanCache', 'Ran pacman -Rns $(pacman -Qtdq)', log_file)
-
-    if PS.YN_Frame('Do You Want To Remove Old Versions of Installed Packages?') is True:
-        os.system('sudo paccache -rk ' + count)
-        PS.Write_To_Log('CleanCache', 'Ran paccache -rk ' + count, log_file)
-
-    if PS.YN_Frame('Do You Want To Remove Cached Orphans?') is True:
-        os.system('sudo paccache -ruk0')
-        PS.Write_To_Log('CleanCache', 'Ran paccache -ruk0', log_file)
-
-    if PS.YN_Frame('Do You Want To Check For Old Pacback Restore Points?') is True:
-        PS.Write_To_Log('CleanCache', 'Started Search For Old RPs', log_file)
-        metas = PS.Search_FS(rp_paths, 'set')
-        rps = {f for f in metas if f.endswith(".meta")}
-
-        for m in rps:
-            rp_num = m.split('/')[-1]
-            # Find RP Create Date in Meta File
-            meta = PS.Read_List(m)
-            target_date = find_in_meta(meta, 'Date Created')
-
-            # Parse and Format Dates for Compare
-            today = dt.datetime.now().strftime("%Y/%m/%d")
-            t_split = list(today.split('/'))
-            today_date = dt.date(int(t_split[0]), int(t_split[1]), int(t_split[2]))
-            o_split = list(target_date.split('/'))
-            old_date = dt.date(int(o_split[0]), int(o_split[1]), int(o_split[2]))
-
-            # Compare Days
-            days = (today_date - old_date).days
-            if days > 180:
-                PS.prWarning(m.split('/')[-1] + ' Is Over 180 Days Old!')
-                if PS.YN_Frame('Do You Want to Remove This Restore Point?') is True:
-                    PS.RM_File(m, sudo=True)
-                    PS.RM_Dir(m[:-5], sudo=True)
-                    PS.prSuccess('Restore Point Removed!')
-                    PS.Write_To_Log('CleanCache', 'Removed RP ' + rp_num, log_file)
-            PS.prSuccess(rp_num + ' Is Only ' + str(days) + ' Days Old!')
-            PS.Write_To_Log('CleanCache', 'RP ' + rp_num + ' Was Less Than 180 Days 0ld', log_file)
+        # Check for Full RP's Created Before V1.5
+        if tv_M == 1 and tv_m < 5:
+            PS.prError('Full Restore Points Generated Before V1.5.0 Are No Longer Compatible With Newer Versions of Pacback!')
+            PS.Write_To_Log('VersionControl', 'Detected Restore Point Version Generated > V1.5', log_file)
+            PS.Abort_With_Log('VersionControl', 'User Exited Upgrade',
+                              'Aborting!', log_file)
